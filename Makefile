@@ -157,6 +157,52 @@ os-uefi-x86_64-run: os-uefi-x86_64
       -boot order=c \
 	  -serial mon:stdio -display none
 
+
+
+# ──  цель bare-rp2040  ────────────────────────────────
+
+RP_DIR      := $(PROJECT_ROOT)/build/bare-rp2040
+RP_ELF      := $(RP_DIR)/vm.elf
+RP_UF2      := $(RP_DIR)/vm.uf2
+
+VM_OBJS_RP  := $(RP_DIR)/core.o
+SVC_OBJS_RP := $(RP_DIR)/puts.o
+BOOT_OBJ    := $(RP_DIR)/boot.o
+
+CFLAGS_RP   := -mcpu=cortex-m0plus -mthumb -ffreestanding -O2 -Wall -Wextra
+LDFLAGS_RP  := -T src/bare/rp2040/link.ld -nostdlib
+
+.PHONY: bare-rp2040 bare-rp2040-run
+bare-rp2040: $(RP_UF2)
+	@echo "👉 UF2-прошивка готова: $(RP_UF2)"
+
+bare-rp2040-run: bare-rp2040
+	$(QEMU) -M raspi0 -kernel $(RP_ELF) -serial mon:stdio -nographic
+
+$(RP_DIR):
+	@mkdir -p $@
+
+# --- NASM ядро (Thumb, elf) ---
+$(RP_DIR)/core.o: src/common/vm/core_arm.asm | $(RP_DIR)
+	$(NASM) -f elf32 $(NASMFLAGS) -DBARE -DARMV6M -o $@ $<
+
+# --- svc_puts ---
+$(RP_DIR)/puts.o: src/bare/rp2040/puts.asm | $(RP_DIR)
+	$(NASM) -f elf32 $(NASMFLAGS) -DBARE -DARMV6M -o $@ $<
+
+# --- start-up ---
+$(RP_DIR)/boot.o: src/bare/rp2040/boot.S | $(RP_DIR)
+	$(CC_ARM) $(CFLAGS_RP) -c $< -o $@
+
+# --- линковка ---
+$(RP_ELF): $(BOOT_OBJ) $(VM_OBJS_RP) $(SVC_OBJS_RP)
+	$(LD_ARM) $(LDFLAGS_RP) $^ -o $@
+
+# --- конвертация в UF2 ---
+$(RP_UF2): $(RP_ELF) tools/elf2uf2.sh
+	tools/elf2uf2.sh $< $@
+
+
 # ───── правила компиляции ─────────────────────────────────────────────────────
 $(BUILD_DIR):
 	@mkdir -p $@

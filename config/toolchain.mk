@@ -8,3 +8,10 @@ AR   ?= ar
 # CRT-старты
 +LD      ?= ld
 +OBJCOPY ?= objcopy
+
+
+# ── arm-none-eabi кросс-компилятор (можно переопределить) ──────────────
+ARM_PREFIX ?= arm-none-eabi-
+CC_ARM     ?= $(ARM_PREFIX)gcc
+LD_ARM     ?= $(ARM_PREFIX)ld
+OBJCOPY_ARM?= $(ARM_PREFIX)objcopy
