@@ -77,18 +77,85 @@ os-bios-x86: $(OS_IMG)
 
 # сборка и запуск сразу в qemu (удобно для теста)
 os-bios-x86-run: os-bios-x86
-	qemu-system-i386 -drive format=raw,file=$(OS_IMG) -nographic
+	$(QEMU) -drive format=raw,file=$(OS_IMG) -nographic
 
 $(OS_BIOS_BUILD):
 	@mkdir -p $@
 
 $(OS_BOOT_BIN): src/os/boot/bios/boot.asm | $(OS_BIOS_BUILD)
-	$(NASM) -f bin -DBIOS -DX86_16 -o $@ $<
+	$(NASM) $(NASMFLAGS) -f bin -DBIOS -DX86_16 -o $@ $<
 
 # итоговый img = просто бут-сектор (один сектор 512 Б)
 $(OS_IMG): $(OS_BOOT_BIN)
 	cp $< $@
 
+
+#  ──  цель os-uefi-x86_64  ─────────────────────────────
+
+UEFI_BUILD   := $(PROJECT_ROOT)/build/os-uefi-x86_64
+UEFI_ELF     := $(UEFI_BUILD)/vm_x64.elf
+UEFI_EFI     := $(UEFI_BUILD)/vm_x64.efi
+
+VM_OBJS_UEFI   := $(UEFI_BUILD)/core.o
+HOST_OBJS_UEFI := $(UEFI_BUILD)/vm_uefi.o
+
+# CFLAGS/LDFLAGS для freestanding-UEFI
+CFLAGS_UEFI  := -ffreestanding -fshort-wchar -mno-red-zone -Wall -Wextra \
+                -fms-extensions -DEFI_APP -Isrc   # +fms-ext
+
+LDFLAGS_UEFI := -nostdlib -T src/os/uefi/elf_x64.ld -e efi_main
+
+.PHONY: os-uefi-x86_64
+os-uefi-x86_64: $(UEFI_EFI)
+	@echo "👉  UEFI-приложение готово: $(UEFI_EFI)"
+
+$(UEFI_BUILD):
+	@mkdir -p $@
+
+# --- NASM ядро ---
+$(UEFI_BUILD)/core.o: src/common/vm/core.asm | $(UEFI_BUILD)
+	$(NASM) $(NASMFLAGS) -f elf64 -DOS -DUEFI -o $@ $<
+
+# --- C обёртка ---
+$(UEFI_BUILD)/vm_uefi.o: src/os/uefi/vm_uefi.c | $(UEFI_BUILD)
+	$(CC) $(CFLAGS_UEFI) -c $< -o $@
+
+# --- линковка ELF ---
+$(UEFI_ELF): $(VM_OBJS_UEFI) $(HOST_OBJS_UEFI)
+	$(LD) $(LDFLAGS_UEFI) $^ -o $@
+
+# --- конвертация в PE/COFF (EFI) ---
+$(UEFI_EFI): $(UEFI_ELF)
+	@[ -n "$(OBJCOPY)" ] || { echo "❌  objcopy/llvm-objcopy not found"; exit 1; }
+	$(OBJCOPY) -O efi-app-x86_64 $< $@
+
+
+.PHONY: os-uefi-x86_64-run
+
+os-uefi-x86_64-run: os-uefi-x86_64
+	@[ -n "$(OVMF_CODE)" ] || { echo "❌ OVMF firmware not found"; exit 1; }
+	@[ -n "$(MKISOFS)" ]   || { echo "❌ mkisofs/xorriso/genisoimage not found"; exit 1; }
+	@echo "== готовим ISO"
+	@echo "-- Создаем папку для BOOT"
+	@mkdir -p $(UEFI_BUILD)/iso/EFI/BOOT
+	@echo "-- Копируем UEFI_EFI"
+	cp  $(UEFI_EFI)  $(UEFI_BUILD)/iso/EFI/BOOT/BOOTX64.EFI
+	@echo "-- startup.nsh"
+	echo "EFI\\BOOT\\BOOTX64.EFI" > $(UEFI_BUILD)/iso/startup.nsh
+	@echo "-- geniso"
+	"$(MKISOFS)" $(ISOFLAGS) \
+	    -o $(UEFI_BUILD)/vm_x64.iso \
+	    $(UEFI_BUILD)/iso/
+	@echo "== запуск"
+	@cp "$(OVMF_VARS)" $(UEFI_BUILD)/OVMF_VARS_RW.fd 2>/dev/null || \
+	  { echo "⚠  cannot copy OVMF_VARS – using blank vars"; \
+	    cp "$(OVMF_CODE)" $(UEFI_BUILD)/OVMF_VARS_RW.fd; }
+	@chmod u+rw $(UEFI_BUILD)/OVMF_VARS_RW.fd
+	$(QEMU) \
+	  -drive if=pflash,format=raw,unit=0,readonly=on,file=$(OVMF_CODE) \
+	  -drive if=pflash,format=raw,unit=1,file=$(UEFI_BUILD)/OVMF_VARS_RW.fd \
+      -boot order=c \
+	  -serial mon:stdio -display none
 
 # ───── правила компиляции ─────────────────────────────────────────────────────
 $(BUILD_DIR):
