@@ -47,7 +47,7 @@ $(BUILD_DIR_SDL):
 
 # ── NASM та же самая конфигурация — переиспользуем $(NASMFLAGS)
 $(BUILD_DIR_SDL)/core.o: src/common/vm/core.asm | $(BUILD_DIR_SDL)
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) -f $(NASM_FMT) $(NASMFLAGS) -o $@ $<
 
 # ── C-обёртка с добавлением SDL-флагов
 $(BUILD_DIR_SDL)/vm_host_sdl.o: src/host/posix/vm_host_sdl.c | $(BUILD_DIR_SDL)
@@ -83,7 +83,7 @@ $(OS_BIOS_BUILD):
 	@mkdir -p $@
 
 $(OS_BOOT_BIN): src/os/boot/bios/boot.asm | $(OS_BIOS_BUILD)
-	$(NASM) $(NASMFLAGS) -f bin -DBIOS -DX86_16 -o $@ $<
+	$(NASM) -f bin $(NASMFLAGS) -f bin -DBIOS -DX86_16 -o $@ $<
 
 # итоговый img = просто бут-сектор (один сектор 512 Б)
 $(OS_IMG): $(OS_BOOT_BIN)
@@ -101,7 +101,7 @@ HOST_OBJS_UEFI := $(UEFI_BUILD)/vm_uefi.o
 
 # CFLAGS/LDFLAGS для freestanding-UEFI
 CFLAGS_UEFI  := -ffreestanding -fshort-wchar -mno-red-zone -Wall -Wextra \
-                -fms-extensions -DEFI_APP -Isrc   # +fms-ext
+                -fms-extensions -DEFI_APP -Isrc
 
 LDFLAGS_UEFI := -nostdlib -T src/os/uefi/elf_x64.ld -e efi_main
 
@@ -114,7 +114,7 @@ $(UEFI_BUILD):
 
 # --- NASM ядро ---
 $(UEFI_BUILD)/core.o: src/common/vm/core.asm | $(UEFI_BUILD)
-	$(NASM) $(NASMFLAGS) -f elf64 -DOS -DUEFI -o $@ $<
+	$(NASM) -f elf64 $(NASMFLAGS) -DOS -DUEFI -o $@ $<
 
 # --- C обёртка ---
 $(UEFI_BUILD)/vm_uefi.o: src/os/uefi/vm_uefi.c | $(UEFI_BUILD)
@@ -161,10 +161,10 @@ os-uefi-x86_64-run: os-uefi-x86_64
 $(BUILD_DIR):
 	@mkdir -p $@
 
-NASMFLAGS := -f $(NASM_FMT) -Isrc -DHOST -DARCH_$(ARCH)
+NASMFLAGS := -Isrc -DHOST -DARCH_$(ARCH)
 
 $(BUILD_DIR)/core.o: src/common/vm/core.asm | $(BUILD_DIR)
-	$(NASM) $(NASMFLAGS) -o $@ $<
+	$(NASM) -f $(NASM_FMT) $(NASMFLAGS) -o $@ $<
 
 CFLAGS += -O2 -pipe -std=c11 -Wall -Wextra $(CFLAGS_ARCH_$(ARCH))
 
