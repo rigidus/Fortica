@@ -1,0 +1,16 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [host-linux, os-bios-x86]
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y nasm gcc qemu-system-i386
+      - run: make ${{ matrix.target }}
