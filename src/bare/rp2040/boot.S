@@ -13,15 +13,18 @@
 /* ───── коды ─────────────────────────────────────────────────────────── */
 .text
 .thumb_func
+.global Reset_Handler      /* ← экспорт для линкера */
 Reset_Handler:
-    ldr   r0, =_sbss
-    ldr   r1, =_ebss
-    movs  r2, #0
-0:  cmp   r0, r1
-    itt   lt
-    strlt r2, [r0], #4
-    bl    vm_entry
-1:  b     1b                 /* loop forever */
+    ldr   r0, =_sbss        /* r0 = dst */
+    ldr   r1, =_ebss        /* r1 = limit */
+    movs  r2, #0            /* r2 = 0      */
+bss_loop:
+    cmp   r0, r1
+    bge   bss_done
+    str   r2, [r0]          /* *r0 = 0            */
+    adds  r0, #4            /* r0 += 4            */
+    b     bss_loop
+bss_done:
 
 /* символ стека */
 .section .stack, "aw", %progbits

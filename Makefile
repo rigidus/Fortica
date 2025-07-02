@@ -182,13 +182,13 @@ bare-rp2040-run: bare-rp2040
 $(RP_DIR):
 	@mkdir -p $@
 
-# --- NASM ядро (Thumb, elf) ---
-$(RP_DIR)/core.o: src/common/vm/core_arm.asm | $(RP_DIR)
-	$(NASM) -f elf32 $(NASMFLAGS) -DBARE -DARMV6M -o $@ $<
+# --- ядро VM (GNU ASM) ---
+$(RP_DIR)/core.o: src/common/vm/core_arm.S | $(RP_DIR)
+	$(CC_ARM) $(CFLAGS_RP) -c $< -o $@
 
-# --- svc_puts ---
-$(RP_DIR)/puts.o: src/bare/rp2040/puts.asm | $(RP_DIR)
-	$(NASM) -f elf32 $(NASMFLAGS) -DBARE -DARMV6M -o $@ $<
+# --- svc_puts (GNU ASM) ---
+$(RP_DIR)/puts.o: src/bare/rp2040/puts.S | $(RP_DIR)
+	$(CC_ARM) $(CFLAGS_RP) -c $< -o $@
 
 # --- start-up ---
 $(RP_DIR)/boot.o: src/bare/rp2040/boot.S | $(RP_DIR)
